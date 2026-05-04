@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PartnerGuru - AI Generator Lembar Ujian</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {}
+            }
+        }
+    </script>
+
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- Babel (Diperbarui ke Versi 7 untuk mendukung sintaks JS modern seperti '?.' Optional Chaining) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-300">
+    
+    <!-- Wadah Aplikasi React -->
+    <div id="root"></div>
+
+    <!-- Gunakan script text/babel agar JSX dan ES6+ dikompilasi oleh Babel -->
+    <script type="text/babel" data-presets="react,env">
+        const { useState, useEffect, useRef } = React;
+
+        // --- KONFIGURASI API GEMINI ---
+        const apiKey = ""; // API key disediakan oleh environment pada saat runtime
+
+        // --- ICON HELPER ---
+        // Komponen pembungkus untuk memuat Lucide Icons melalui CDN
+        const Icon = ({ icon, className }) => {
+            const getSvg = () => {
+                if (!window.lucide || !window.lucide.icons) return '';
+                let lucideIcon = window.lucide.icons[icon] || window.lucide.icons[icon.toLowerCase()];
+                if(!lucideIcon) {
+                    if(icon === 'loader2') lucideIcon = window.lucide.icons['loader'];
+                    else if(icon === 'checkCircle2') lucideIcon = window.lucide.icons['checkCircle'];
+                    else lucideIcon = window.lucide.icons['helpCircle'];
+                }
+                return lucideIcon ? lucideIcon.toSvg({ class: className || 'w-5 h-5' }) : '';
+            };
+
+            const [svgContent, setSvgContent] = useState('');
+            useEffect(() => {
+                setSvgContent(getSvg());
+            }, [icon, className]);
+
+            return <span className="inline-flex items-center justify-center" dangerouslySetInnerHTML={{ __html: svgContent }} />;
+        };
+
+        // Pemetaan Ikon
+        const LayoutTemplate = (p) => <Icon icon="layoutTemplate" {...p} />;
+        const Sun = (p) => <Icon icon="sun" {...p} />;
+        const Moon = (p) => <Icon icon="moon" {...p} />;
+        const Sparkles = (p) => <Icon icon="sparkles" {...p} />;
+        const AlertCircle = (p) => <Icon icon="alertCircle" {...p} />;
+        const BookOpen = (p) => <Icon icon="bookOpen" {...p} />;
+        const Brain = (p) => <Icon icon="brain" {...p} />;
+        const Loader2 = (p) => <Icon icon="loader2" {...p} />;
+        const ImageIcon = (p) => <Icon icon="image" {...p} />;
+        const Printer = (p) => <Icon icon="printer" {...p} />;
+        const RefreshCw = (p) => <Icon icon="refreshCw" {...p} />;
+        const GraduationCap = (p) => <Icon icon="graduationCap" {...p} />;
+        const Settings = (p) => <Icon icon="settings" {...p} />;
+        const Download = (p) => <Icon icon="download" {...p} />;
+        const Copy = (p) => <Icon icon="copy" {...p} />;
+        const CheckCircle2 = (p) => <Icon icon="checkCircle2" {...p} />;
+
+        // --- KOMPONEN UTAMA ---
+        function App() {
+          const [darkMode, setDarkMode] = useState(false);
+
+          // Cek preferensi tema sistem saat pertama kali dimuat
+          useEffect(() => {
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+              setDarkMode(true);
+            }
+          }, []);
+
+          // Terapkan class 'dark' ke elemen HTML
+          useEffect(() => {
+            if (darkMode) document.documentElement.classList.add('dark');
+            else document.documentElement.classList.remove('dark');
+          }, [darkMode]);
+
+          // SETUP MATHJAX (RUMUS MATEMATIKA) & HTML-DOCX / HTML2PDF
+          useEffect(() => {
+            if (!window.MathJax) {
+              window.MathJax = {
+                tex: {
+                  inlineMath: [['$', '$'], ['\\(', '\\)']],
+                  displayMath: [['$$', '$$'], ['\\[', '\\]']]
+                },
+                startup: { typeset: false }
+              };
+              const scriptMath = document.createElement('script');
+              scriptMath.src = 'https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js';
+              scriptMath.async = true;
+              document.head.appendChild(scriptMath);
+            }
+
+            if (!window.htmlDocx) {
+              const scriptDocx = document.createElement('script');
+              scriptDocx.src = 'https://cdn.jsdelivr.net/npm/html-docx-js@0.3.1/dist/html-docx.js';
+              scriptDocx.async = true;
+              document.head.appendChild(scriptDocx);
+            }
+
+            if (!window.html2pdf) {
+              const scriptPdf = document.createElement('script');
+              scriptPdf.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+              scriptPdf.async = true;
+              document.head.appendChild(scriptPdf);
+            }
+          }, []);
+
+          return (
+            <div className={`min-h-screen font-sans transition-colors duration-300 flex flex-col ${darkMode ? 'dark bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-800'}`}>
+              
+              {/* Top Header (Navigasi Atas) - Disembunyikan saat mode Print */}
+              <header className={`print:hidden sticky top-0 z-30 h-16 px-4 sm:px-6 flex items-center justify-between shadow-sm border-b transition-colors duration-300 ${darkMode ? 'bg-slate-800/90 backdrop-blur-md border-slate-700' : 'bg-white/90 backdrop-blur-md border-slate-200'}`}>
+                <div className="flex items-center gap-2 text-orange-500 dark:text-orange-400">
+                  <Sparkles className="w-6 h-6" />
+                  <h1 className="text-xl font-bold">PartnerGuru</h1>
+                </div>
+                <div className="flex items-center gap-4">
+                   <span className="text-xs font-medium text-slate-500 dark:text-slate-400 hidden sm:inline-block">AI Generator Lembar Ujian</span>
+                   <button onClick={() => setDarkMode(!darkMode)} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" title="Ubah Tema">
+                      {darkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-500" />}
+                    </button>
+                </div>
+              </header>
+
+              {/* Main Content Area - Full Width */}
+              <main className="flex-1 p-3 sm:p-4 md:p-6 lg:p-6 w-full h-[calc(100vh-4rem)] print:h-auto print:p-0 print:block">
+                <GeneratorView darkMode={darkMode} />
+              </main>
+            </div>
+          );
+        }
+
+        // --- GENERATOR VIEW (FITUR UTAMA) ---
+
+        const initialFormState = {
+          kabupaten: '', dinas: '', sekolah: '', alamat: '',
+          jenisUjian: '', tahunPelajaran: '', guru: '', nip: '',
+          mataPelajaran: '', jenjang: '', kelas: '', semester: '', 
+          kurikulum: '', topik: '', tujuanPembelajaran: '', durasi: '',
+          jumlahPG: '', jumlahPGK: '', jumlahIsian: '', jumlahEsai: '', 
+          jumlahBS: '', jumlahJodoh: '', tingkatKesulitan: '', levelKognitif: '',
+          opsiPG: '4', 
+          sertakanGambar: true, konteks: ''
+        };
+
+        // Fungsi pengaman anti-crash JSON AI
+        const safeRender = (val) => {
+          if (val === null || val === undefined) return '';
+          if (Array.isArray(val)) return val.join(', ');
+          if (typeof val === 'object') {
+            try { return JSON.stringify(val); } catch(e) { return ''; }
+          }
+          return String(val);
+        };
+
+        function GeneratorView({ darkMode }) {
+          const [formData, setFormData] = useState(initialFormState);
+          const [isGenerating, setIsGenerating] = useState(false);
+          const [fetchingImages, setFetchingImages] = useState(false);
+          const [result, setResult] = useState(null);
+          const [error, setError] = useState('');
+          const [progressMsg, setProgressMsg] = useState('');
+          const [activeTab, setActiveTab] = useState('kisi'); // kisi, soal, kunci, all
+          const [retryingImages, setRetryingImages] = useState({});
+          const [toast, setToast] = useState({ show: false, message: '', type: '' });
+          const printRef = useRef(null);
+
+          // TRIGGER MATHJAX
+          useEffect(() => {
+            if (result && window.MathJax && window.MathJax.typesetPromise) {
+              const timeoutId = setTimeout(() => {
+                window.MathJax.typesetPromise().catch(err => console.log('MathJax Error:', err));
+              }, 200);
+              return () => clearTimeout(timeoutId);
+            }
+          }, [result, activeTab]);
+
+          const handleChange = (e) => {
+            const { name, value, type, checked } = e.target;
+            setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value });
+          };
+
+          // GENERATE GAMBAR
+          const generateImageFast = async (promptText) => {
+            const maxRetries = 2; 
+            for (let i = 0; i < maxRetries; i++) {
+              try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`, {
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ 
+                                text: "Buatkan gambar ilustrasi atau diagram pendidikan sederhana, minimalis, dan jelas tentang: " + promptText + ". PENTING: Semua teks, keterangan, atau label di dalam gambar WAJIB menggunakan ejaan Bahasa Indonesia yang benar. Latar belakang putih bersih." 
+                            }]
+                        }],
+                        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] }
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    let base64 = null;
+                    if (data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+                        const part = data.candidates[0].content.parts.find(p => p.inlineData);
+                        if (part && part.inlineData) {
+                            base64 = part.inlineData.data;
+                        }
+                    }
+                    if (base64) return `data:image/png;base64,${base64}`;
+                }
+              } catch (err) {
+                 console.warn(`Fast Image Retry ${i+1} failed`);
+              }
+              if (i < maxRetries - 1) await new Promise(res => setTimeout(res, 500)); 
+            }
+            return null;
+          };
+
+          const retrySingleImage = async (type, index, promptText) => {
+            const key = `${type}-${index}`;
+            setRetryingImages(prev => ({ ...prev, [key]: true }));
+            const imageUrl = await generateImageFast(promptText);
+            
+            setResult(prevResult => {
+              const newData = JSON.parse(JSON.stringify(prevResult)); 
+              if (imageUrl) {
+                newData.soal[type][index].image_url = imageUrl;
+                newData.soal[type][index].image_error = false;
+              } else {
+                newData.soal[type][index].image_error = true;
+              }
+              return newData;
+            });
+            setRetryingImages(prev => ({ ...prev, [key]: false }));
+          };
+
+          const handleGenerate = async (e) => {
+            e.preventDefault();
+            if (!formData.mataPelajaran || !formData.topik) {
+                setError('Mata Pelajaran dan Topik/Bab wajib diisi.');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+            
+            const totPG = Number(formData.jumlahPG) || 0;
+            const totPGK = Number(formData.jumlahPGK) || 0;
+            const totIsian = Number(formData.jumlahIsian) || 0;
+            const totEsai = Number(formData.jumlahEsai) || 0;
+            const totBS = Number(formData.jumlahBS) || 0;
+            const totJodoh = Number(formData.jumlahJodoh) || 0;
+            
+            const totSoal = totPG + totPGK + totIsian + totEsai + totBS + totJodoh;
+            
+            if (totSoal === 0) {
+                setError('Silakan isi jumlah minimal 1 soal pada salah satu bentuk soal.');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                return;
+            }
+
+            setError(''); 
+            setIsGenerating(true); 
+            setResult(null); 
+            setRetryingImages({});
+            setProgressMsg('Menghubungkan ke Gemini AI...');
+
+            const opsiLetters = formData.opsiPG === "3" ? "A, B, C" : formData.opsiPG === "5" ? "A, B, C, D, E" : "A, B, C, D";
+            const opsiArrayStr = formData.opsiPG === "3" ? '["A. ...", "B. ...", "C. ..."]' : formData.opsiPG === "5" ? '["A. ...", "B. ...", "C. ...", "D. ...", "E. ..."]' : '["A. ...", "B. ...", "C. ...", "D. ..."]';
+
+            const promptText = `
+Anda adalah pembuat soal ujian profesional di Indonesia. Buatlah paket soal dengan rincian berikut:
+
+DATA:
+- Mapel: ${formData.mataPelajaran || 'Umum'}
+- Jenjang & Kelas: ${formData.jenjang || '-'} / ${formData.kelas || '-'}
+- Jenis Evaluasi: ${formData.jenisUjian || 'Ujian/Latihan'} Semester ${formData.semester || '-'}
+- Materi/Topik: ${formData.topik}
+- Tujuan Pembelajaran: ${formData.tujuanPembelajaran || 'Peserta didik memahami materi tersebut'}
+- Tingkat Kesulitan Soal: ${formData.tingkatKesulitan || 'Campuran (Mudah, Sedang, Sulit)'}
+- Komposisi Kognitif: ${formData.levelKognitif || 'Campuran (HOTS, MOTS, LOTS)'}
+- Visual: ${formData.sertakanGambar ? 'Sertakan deskripsi BHS INDONESIA SINGKAT (maks 10 kata) untuk field gambar_dibutuhkan HANYA PADA SOAL YANG SANGAT MEMBUTUHKAN ILUSTRASI (Maksimal 3 soal keseluruhan untuk mempercepat render). Contoh: "Diagram rantai makanan di sawah". Jika tidak perlu gambar, isi "null"' : 'Isi gambar_dibutuhkan dengan "null"'}
+- Penulisan Rumus (Equation): WAJIB gunakan format LaTeX untuk rumus Matematika/Sains/Fisika/Kimia. Gunakan pembungkus $...$ untuk rumus di dalam teks (inline) dan $$...$$ untuk rumus blok. PASTIKAN untuk meng-escape karakter backslash pada JSON dengan double backslash (contoh yang benar: "Nilai dari $\\\\frac{1}{2}$").
+
+STRUKTUR SOAL DIMINTA:
+- Pilihan Ganda (PG) Biasa: ${totPG} soal (Hanya 1 jawaban benar, sediakan ${formData.opsiPG} Opsi: ${opsiLetters})
+- Pilihan Ganda Kompleks (PGK): ${totPGK} soal (Sediakan ${formData.opsiPG} Opsi: ${opsiLetters}, dan pastikan ada 2-3 jawaban yang benar)
+- Isian Singkat: ${totIsian} soal
+- Uraian / Esai: ${totEsai} soal
+- Benar / Salah (BS): ${totBS} soal
+- Menjodohkan: ${totJodoh > 0 ? `Ya, buat 1 blok soal menjodohkan yang berisi tepat ${totJodoh} premis (pertanyaan) dan pilihan jawaban` : '0 soal'}
+
+OUTPUT WAJIB DALAM FORMAT JSON BERIKUT (Tanpa markdown):
+{
+  "kisi_kisi": [
+    { "no": "1", "materi_pokok": "...", "indikator": "...", "level": "C1/C2/etc", "stimulus_visual": "...", "no_soal": "..." }
+  ],
+  "soal": {
+    "pg": [ 
+      { "no": "1", "pertanyaan": "...", "gambar_dibutuhkan": "...", "opsi": ${opsiArrayStr} } 
+    ],
+    "pgk": [ 
+      { "no": "6", "pertanyaan": "...", "gambar_dibutuhkan": "...", "opsi": ${opsiArrayStr} } 
+    ],
+    "isian": [ 
+      { "no": "21", "pertanyaan": "...", "gambar_dibutuhkan": "..." } 
+    ],
+    "esai": [ 
+      { "no": "26", "pertanyaan": "...", "gambar_dibutuhkan": "..." } 
+    ],
+    "bs": [
+      { "no": "31", "pertanyaan": "...", "gambar_dibutuhkan": "..." }
+    ],
+    "jodoh": {
+      "ada": ${totJodoh > 0},
+      "petunjuk": "Jodohkanlah pernyataan di Kolom A dengan pilihan di Kolom B yang paling tepat!",
+      "premis": [ { "no": "36", "teks": "..." } ],
+      "pilihan": [ "A. ...", "B. ...", "C. ..." ]
+    }
+  },
+  "kunci": {
+    "pg": [ { "no": "1", "jawaban": "A", "level": "C1" } ],
+    "pgk": [ { "no": "6", "jawaban": ["A", "C", "D"], "level": "C3" } ],
+    "isian": [ { "no": "21", "jawaban": "...", "skor_maks": "4" } ],
+    "bs": [ { "no": "31", "jawaban": "Benar" } ],
+    "jodoh": [ { "no": "36", "jawaban_huruf": "B", "jawaban_teks": "..." } ]
+  },
+  "rubrik_esai": [
+    { "kriteria": "...", "skor_4": "Penjelasan Sangat Baik...", "skor_3": "Penjelasan Baik...", "skor_2": "Cukup...", "skor_1": "Kurang...", "skor_maks": "4" }
+  ]
+}
+
+PENTING:
+- Pastikan array "pg" berjumlah persis ${totPG}, "pgk" berjumlah ${totPGK}, "isian" berjumlah ${totIsian}, "esai" berjumlah ${totEsai}, dan "bs" berjumlah ${totBS}. 
+- Untuk "jodoh.premis", pastikan jumlahnya persis ${totJodoh}.
+- Jika jumlah jenis soal adalah 0, berikan array kosong []. Lanjutkan penomoran soal (no) dengan runtut.
+- Pada "kisi_kisi", pastikan memuat SEMUA soal dari semua jenis yang digenerate.
+`;
+
+            try {
+              setProgressMsg('Menyusun kisi-kisi, soal, dan pedoman penskoran...');
+              
+              const fetchTextWithRetry = async () => {
+                  const delays = [1000, 2000, 4000];
+                  for(let i = 0; i < delays.length; i++) {
+                      try {
+                          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                              method: 'POST', headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                contents: [{ parts: [{ text: promptText }] }],
+                                generationConfig: { temperature: 0.7, responseMimeType: "application/json" }
+                              })
+                          });
+                          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                          return await response.json();
+                      } catch (e) {
+                          if (i === delays.length - 1) throw e;
+                          await new Promise(res => setTimeout(res, delays[i]));
+                      }
+                  }
+              };
+
+              const data = await fetchTextWithRetry();
+              
+              let cleanJsonString = data.candidates[0].content.parts[0].text.trim();
+              if (cleanJsonString.startsWith('```json')) cleanJsonString = cleanJsonString.substring(7);
+              if (cleanJsonString.endsWith('```')) cleanJsonString = cleanJsonString.substring(0, cleanJsonString.length - 3);
+
+              const parsedData = JSON.parse(cleanJsonString);
+              let finalData = { ...parsedData };
+
+              finalData.meta_count = { pg: totPG, pgk: totPGK, isian: totIsian, esai: totEsai, bs: totBS, jodoh: totJodoh };
+
+              setResult(finalData); 
+              setActiveTab('soal');
+              setIsGenerating(false);
+
+              // Mulai Render Gambar
+              if (formData.sertakanGambar) {
+                setFetchingImages(true);
+                let imageTasks = [];
+                const types = ['pg', 'pgk', 'isian', 'esai', 'bs'];
+                
+                types.forEach(type => {
+                    if(finalData.soal && finalData.soal[type] && finalData.soal[type].length > 0) {
+                        finalData.soal[type].forEach(async (item, index) => {
+                            if (item.gambar_dibutuhkan && safeRender(item.gambar_dibutuhkan) !== "null" && safeRender(item.gambar_dibutuhkan).trim() !== "") {
+                                const task = async () => {
+                                    const imageUrl = await generateImageFast(item.gambar_dibutuhkan);
+                                    setResult(prev => {
+                                        if(!prev) return prev;
+                                        let newData = JSON.parse(JSON.stringify(prev));
+                                        if (imageUrl) {
+                                            newData.soal[type][index].image_url = imageUrl;
+                                            newData.soal[type][index].image_error = false;
+                                        } else {
+                                            newData.soal[type][index].image_error = true;
+                                        }
+                                        return newData;
+                                    });
+                                };
+                                imageTasks.push(task());
+                            }
+                        });
+                    }
+                });
+
+                Promise.allSettled(imageTasks).then(() => {
+                   setFetchingImages(false);
+                });
+              }
+
+              if (window.innerWidth < 1024) {
+                  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+              }
+              
+            } catch (err) {
+              console.error("API Error:", err);
+              setError('Terjadi kesalahan format dari AI. Mohon kurangi sedikit jumlah soal atau coba generate ulang.');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              setIsGenerating(false);
+            }
+          };
+
+          // =========================================================================
+          // FUNGSI 1: DOWNLOAD PDF LANGSUNG (Direct File Download)
+          // =========================================================================
+          const handleDownloadPDF = () => {
+            if (!printRef.current) return;
+            if (!window.html2pdf) {
+              setToast({ show: true, message: 'Pustaka PDF belum dimuat. Harap tunggu sebentar.', type: 'error' });
+              return;
+            }
+
+            setToast({ show: true, message: 'Menyusun PDF secara langsung, mohon tunggu...', type: 'loading' });
+            
+            const prevTab = activeTab;
+            setActiveTab('all');
+
+            setTimeout(() => {
+                const element = printRef.current;
+                
+                // Sembunyikan elemen UI khusus saat memfoto untuk PDF
+                const noPrintElements = element.querySelectorAll('.print\\:hidden');
+                noPrintElements.forEach(el => el.style.display = 'none');
+
+                const opt = {
+                  margin:       [15, 10, 15, 10], // Margin: Atas, Kanan, Bawah, Kiri
+                  filename:     `Naskah_Soal_${(safeRender(formData.mataPelajaran) || 'Mapel').replace(/\s+/g, '_')}.pdf`,
+                  image:        { type: 'jpeg', quality: 0.98 },
+                  html2canvas:  { scale: 2, useCORS: true },
+                  jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                  pagebreak:    { mode: ['css', 'legacy'], avoid: ['.break-inside-avoid', 'tr', 'img'] }
+                };
+
+                window.html2pdf().set(opt).from(element).save().then(() => {
+                    noPrintElements.forEach(el => el.style.display = ''); // Kembalikan UI
+                    setActiveTab(prevTab);
+                    setToast({ show: true, message: 'PDF Berhasil Diunduh!', type: 'success' });
+                    setTimeout(() => setToast({ show: false, message: '', type: '' }), 4000);
+                }).catch(err => {
+                    console.error(err);
+                    noPrintElements.forEach(el => el.style.display = '');
+                    setActiveTab(prevTab);
+                    setToast({ show: true, message: 'Terjadi kesalahan saat mengunduh PDF.', type: 'error' });
+                    setTimeout(() => setToast({ show: false, message: '', type: '' }), 4000);
+                });
+            }, 1500); 
+          };
+
+          // =========================================================================
+          // FUNGSI 2: EXPORT KE WORD (.DOCX) - MENGGUNAKAN LIBRARY HTML-DOCX-JS
+          // =========================================================================
+          const exportToWord = () => {
+            if (!printRef.current) return;
+
+            if (!window.htmlDocx) {
+                setToast({ show: true, message: 'Menunggu library pembuat Word dimuat. Coba klik lagi.', type: 'error' });
+                return;
+            }
+
+            setToast({ show: true, message: 'Mengekstrak gambar dan membuat file Word (.docx)...', type: 'loading' });
+            
+            const prevTab = activeTab;
+            setActiveTab('all'); 
+
+            setTimeout(() => {
+              try {
+                const clone = printRef.current.cloneNode(true);
+                
+                // Buang tombol/elemen antarmuka UI
+                const noPrintElements = clone.querySelectorAll('.print\\:hidden');
+                noPrintElements.forEach(el => el.remove());
+
+                // PERSIAPAN GAMBAR UNTUK HTML-DOCX: 
+                const images = clone.querySelectorAll('img');
+                images.forEach(img => {
+                    img.setAttribute('width', '400'); 
+                    img.style.maxWidth = '100%'; 
+                    img.style.display = 'block';
+                    img.style.margin = '10px auto';
+                    img.removeAttribute('class'); 
+                });
+
+                // Hapus elemen loading text jika ada
+                const loadingTexts = clone.querySelectorAll('span');
+                loadingTexts.forEach(span => {
+                    if (span.innerText.includes('Merender Ilustrasi')) span.remove();
+                });
+
+                // Struktur HTML Murni 
+                let htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta charset="utf-8">
+        <title>${safeRender(formData.mataPelajaran) || 'Dokumen Evaluasi'}</title>
+        <style>
+          body { font-family: 'Times New Roman', Times, serif; font-size: 11pt; line-height: 1.5; color: black; }
+          table { border-collapse: collapse; width: 100%; margin-bottom: 12px; }
+          th, td { border: 1px solid black; padding: 6px; vertical-align: top; text-align: left; }
+          .border-none, .border-none th, .border-none td { border: none !important; }
+          .bg-gray-100 { background-color: #f3f4f6; }
+          .bg-gray-50 { background-color: #f9fafb; }
+          .text-center { text-align: center; }
+          .font-bold { font-weight: bold; }
+          .uppercase { text-transform: uppercase; }
+          .underline { text-decoration: underline; }
+          .italic { font-style: italic; }
+          .mb-2 { margin-bottom: 8px; }
+          .mb-4 { margin-bottom: 16px; }
+          .mb-6 { margin-bottom: 24px; }
+          .mb-8 { margin-bottom: 32px; }
+        </style>
+        </head>
+        <body>
+        ${clone.innerHTML}
+        </body>
+        </html>
+                `;
+
+                // Konversi menggunakan library htmlDocx ke format asli OOXML .docx
+                const converted = window.htmlDocx.asBlob(htmlContent, { 
+                    orientation: 'portrait', 
+                    margins: { top: 720, right: 720, bottom: 720, left: 720 } 
+                });
+                
+                const url = URL.createObjectURL(converted);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Naskah_Soal_${(safeRender(formData.mataPelajaran) || 'Mapel').replace(/\s+/g, '_')}.docx`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                
+                setActiveTab(prevTab);
+                setToast({ show: true, message: 'Berhasil didownload! Buka file .docx di WPS / MS Word.', type: 'success' });
+              } catch (err) {
+                console.error(err);
+                setActiveTab(prevTab);
+                setToast({ show: true, message: 'Gagal mengekspor dokumen Word.', type: 'error' });
+              }
+              setTimeout(() => setToast({ show: false, message: '', type: '' }), 4000);
+            }, 1000); 
+          };
+
+          return (
+            <div className="flex flex-col lg:flex-row gap-4 lg:gap-6 max-w-[1400px] mx-auto h-full relative">
+              
+              {/* FORM KIRI: Parameter Soal */}
+              <div className={`w-full lg:w-[340px] xl:w-[400px] flex-shrink-0 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden print:hidden flex flex-col h-full lg:max-h-full ${result ? 'hidden lg:flex' : 'flex'}`}>
+                <div className="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-700 bg-orange-50 dark:bg-slate-800/50 flex justify-between items-center sticky top-0 z-10 shrink-0">
+                  <h2 className="font-bold text-sm flex items-center gap-2 uppercase text-slate-700 dark:text-slate-300">
+                    <Settings className="w-4 h-4 text-orange-500" /> Parameter Soal
+                  </h2>
+                  {result && <button onClick={() => setResult(null)} className="lg:hidden text-xs text-orange-600 font-medium px-2 py-1 bg-orange-50 rounded border border-orange-200">Kembali ke Form</button>}
+                </div>
+                
+                <div className="p-4 overflow-y-auto flex-1 custom-scrollbar pb-24 lg:pb-4">
+                  <form id="gen-form" onSubmit={handleGenerate} className="space-y-6">
+                    
+                    {/* KOP & INSTANSI */}
+                    <section className="space-y-3">
+                      <h3 className="text-xs font-bold uppercase text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-1 flex items-center gap-1"><LayoutTemplate className="w-3 h-3"/> Kop Surat & Identitas</h3>
+                      
+                      <select name="jenisUjian" value={formData.jenisUjian} onChange={handleChange} className={`w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs font-medium focus:ring-2 focus:ring-orange-500 ${!formData.jenisUjian ? 'text-slate-400 dark:text-slate-500' : ''}`}>
+                        <option value="" disabled>Pilih Jenis Ujian / Asesmen...</option>
+                        <option value="Ujian Tengah Semester">Ujian Tengah Semester (UTS)</option>
+                        <option value="Ujian Akhir Semester">Ujian Akhir Semester (UAS)</option>
+                        <option value="Ujian Sekolah">Ujian Sekolah (US)</option>
+                        <option value="Asesmen Formatif">Asesmen Formatif</option>
+                        <option value="Sumatif Lingkup Materi">Sumatif Lingkup Materi</option>
+                      </select>
+
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <input type="text" name="kabupaten" value={formData.kabupaten} onChange={handleChange} className="w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs placeholder:text-slate-300 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500" placeholder="Cth: KAB. SUKA MAJU" />
+                        <input type="text" name="dinas" value={formData.dinas} onChange={handleChange} className="w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs placeholder:text-slate-300 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500" placeholder="Cth: DINAS PENDIDIKAN" />
+                      </div>
+                      <input type="text" name="sekolah" value={formData.sekolah} onChange={handleChange} className="w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs placeholder:text-slate-300 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500" placeholder="Cth: SDN 01 CONTOH NEGERI" />
+                      <textarea name="alamat" value={formData.alamat} onChange={handleChange} rows="2" className="w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs placeholder:text-slate-300 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500" placeholder="Cth: Jl. Merdeka No. 123, Kota Fiktif"></textarea>
+                    </section>
+
+                    {/* DATA MAPEL & TOPIK */}
+                    <section className="space-y-3">
+                      <h3 className="text-xs font-bold uppercase text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-1 flex items-center gap-1"><BookOpen className="w-3 h-3"/> Data Pembelajaran</h3>
+                      
+                      <input required type="text" name="mataPelajaran" value={formData.mataPelajaran} onChange={handleChange} className="w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs font-bold placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500" placeholder="Cth: Ilmu Pengetahuan Alam (Wajib)" />
+                      
+                      <div className="grid grid-cols-3 gap-2.5">
+                        <select name="jenjang" value={formData.jenjang} onChange={handleChange} className={`w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-[11px] focus:ring-2 focus:ring-orange-500 ${!formData.jenjang ? 'text-slate-400 dark:text-slate-500' : ''}`}>
+                          <option value="" disabled>Jenjang...</option>
+                          <option value="SD/MI">SD / MI</option>
+                          <option value="SMP/MTs">SMP / MTs</option>
+                          <option value="SMA/MA">SMA / MA</option>
+                          <option value="SMK/MAK">SMK / MAK</option>
+                          <option value="Perguruan Tinggi">Perguruan Tinggi</option>
+                        </select>
+                        
+                        <select name="kelas" value={formData.kelas} onChange={handleChange} className={`w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-[11px] focus:ring-2 focus:ring-orange-500 ${!formData.kelas ? 'text-slate-400 dark:text-slate-500' : ''}`}>
+                          <option value="" disabled>Kelas...</option>
+                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(num => (
+                            <option key={num} value={num.toString()}>Kelas {num}</option>
+                          ))}
+                          <option value="Umum">Umum</option>
+                        </select>
+
+                        <select name="semester" value={formData.semester} onChange={handleChange} className={`w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-[11px] focus:ring-2 focus:ring-orange-500 ${!formData.semester ? 'text-slate-400 dark:text-slate-500' : ''}`}>
+                          <option value="" disabled>Semester...</option>
+                          <option value="Ganjil">Ganjil</option>
+                          <option value="Genap">Genap</option>
+                        </select>
+                      </div>
+
+                      <input required type="text" name="topik" value={formData.topik} onChange={handleChange} className="w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500" placeholder="Cth: Sistem Tata Surya (Wajib Diisi)" />
+                      
+                      <textarea name="tujuanPembelajaran" value={formData.tujuanPembelajaran} onChange={handleChange} rows="2" className="w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500" placeholder="Tujuan Pembelajaran: Cth. Peserta didik mampu menjelaskan proses rotasi bumi..."></textarea>
+
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <input type="text" name="tahunPelajaran" value={formData.tahunPelajaran} onChange={handleChange} className="w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs placeholder:text-slate-300 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500" placeholder="Cth: 2026/2027" />
+                        <input type="text" name="durasi" value={formData.durasi} onChange={handleChange} className="w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs placeholder:text-slate-300 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500" placeholder="Durasi (Cth: 90 Menit)" />
+                      </div>
+                    </section>
+
+                    {/* KOMPOSISI SOAL */}
+                    <section className="space-y-3">
+                      <h3 className="text-xs font-bold uppercase text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-1 flex items-center gap-1"><Brain className="w-3 h-3"/> Spesifikasi Soal</h3>
+                      
+                      <div className="grid grid-cols-3 gap-2.5">
+                        <div>
+                          <label className="block text-[10px] font-medium text-slate-500 mb-1 line-clamp-1">Jml PG Biasa</label>
+                          <input type="number" min="0" max="50" name="jumlahPG" value={formData.jumlahPG} onChange={handleChange} className="w-full rounded border-slate-300 bg-white p-2 text-xs text-center placeholder:text-slate-300 focus:ring-2 focus:ring-orange-500" placeholder="5" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-medium text-slate-500 mb-1 line-clamp-1">Jml PG Kompleks</label>
+                          <input type="number" min="0" max="20" name="jumlahPGK" value={formData.jumlahPGK} onChange={handleChange} className="w-full rounded border-slate-300 bg-white p-2 text-xs text-center placeholder:text-slate-300 focus:ring-2 focus:ring-orange-500" placeholder="0" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-medium text-slate-500 mb-1 line-clamp-1">Jml Isian</label>
+                          <input type="number" min="0" max="20" name="jumlahIsian" value={formData.jumlahIsian} onChange={handleChange} className="w-full rounded border-slate-300 bg-white p-2 text-xs text-center placeholder:text-slate-300 focus:ring-2 focus:ring-orange-500" placeholder="2" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-medium text-slate-500 mb-1 line-clamp-1">Jml Esai</label>
+                          <input type="number" min="0" max="10" name="jumlahEsai" value={formData.jumlahEsai} onChange={handleChange} className="w-full rounded border-slate-300 bg-white p-2 text-xs text-center placeholder:text-slate-300 focus:ring-2 focus:ring-orange-500" placeholder="1" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-medium text-slate-500 mb-1 line-clamp-1">Jml Benar/Salah</label>
+                          <input type="number" min="0" max="20" name="jumlahBS" value={formData.jumlahBS} onChange={handleChange} className="w-full rounded border-slate-300 bg-white p-2 text-xs text-center placeholder:text-slate-300 focus:ring-2 focus:ring-orange-500" placeholder="0" />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-medium text-slate-500 mb-1 line-clamp-1">Jml Jodoh</label>
+                          <input type="number" min="0" max="10" name="jumlahJodoh" value={formData.jumlahJodoh} onChange={handleChange} className="w-full rounded border-slate-300 bg-white p-2 text-xs text-center placeholder:text-slate-300 focus:ring-2 focus:ring-orange-500" placeholder="0" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 mt-1">
+                        <select name="tingkatKesulitan" value={formData.tingkatKesulitan} onChange={handleChange} className={`w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs focus:ring-2 focus:ring-orange-500 ${!formData.tingkatKesulitan ? 'text-slate-400 dark:text-slate-500' : ''}`}>
+                          <option value="" disabled>Tingkat Kesulitan...</option>
+                          <option value="Mudah">Mudah (Dominan LOTS)</option>
+                          <option value="Sedang">Sedang (Dominan MOTS)</option>
+                          <option value="Sulit">Sulit (Dominan HOTS)</option>
+                          <option value="Campuran">Campuran (Mudah, Sedang, Sulit)</option>
+                        </select>
+
+                        <select name="opsiPG" value={formData.opsiPG} onChange={handleChange} className={`w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs focus:ring-2 focus:ring-orange-500`}>
+                          <option value="3">3 Opsi (A, B, C)</option>
+                          <option value="4">4 Opsi (A, B, C, D)</option>
+                          <option value="5">5 Opsi (A, B, C, D, E)</option>
+                        </select>
+                      </div>
+
+                      <input type="text" name="levelKognitif" value={formData.levelKognitif} onChange={handleChange} className="w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500" placeholder="Keterangan Level (Cth: Dominan C4-C6)" />
+                    </section>
+
+                    {/* PENGESAHAN */}
+                    <section className="space-y-3">
+                      <h3 className="text-xs font-bold uppercase text-slate-400 border-b border-slate-200 dark:border-slate-700 pb-1 flex items-center gap-1"><GraduationCap className="w-3 h-3"/> Pengesahan</h3>
+                      <div className="grid grid-cols-2 gap-2.5">
+                        <input type="text" name="guru" value={formData.guru} onChange={handleChange} className="w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs placeholder:text-slate-300 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500" placeholder="Cth: Budi Santoso, S.Pd" />
+                        <input type="text" name="nip" value={formData.nip} onChange={handleChange} className="w-full rounded border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 p-2 text-xs placeholder:text-slate-300 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-orange-500" placeholder="Cth: NIP. 19800101 ..." />
+                      </div>
+                    </section>
+
+                    <label className="flex items-center gap-2 cursor-pointer bg-orange-50 dark:bg-orange-900/20 p-2 rounded border border-orange-100 dark:border-orange-800/50 mt-4 transition-colors hover:bg-orange-100">
+                        <input type="checkbox" name="sertakanGambar" checked={formData.sertakanGambar} onChange={handleChange} className="rounded text-orange-600 focus:ring-orange-500" />
+                        <span className="text-xs font-medium text-orange-800 dark:text-orange-300 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> Auto-Generate Gambar Visual</span>
+                    </label>
+
+                  </form>
+                </div>
+
+                <div className="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 shrink-0">
+                  {error && <div className="mb-2 text-red-600 bg-red-50 p-2 rounded text-xs flex gap-1.5 items-start"><AlertCircle className="w-4 h-4 shrink-0 mt-0.5" /><span>{error}</span></div>}
+                  <button type="submit" form="gen-form" disabled={isGenerating} className={`w-full py-2.5 sm:py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all ${isGenerating ? 'bg-slate-300 text-slate-500' : 'bg-orange-500 hover:bg-orange-600 text-white shadow-sm hover:shadow active:scale-95'}`}>
+                    {isGenerating ? <><Loader2 className="w-4 h-4 animate-spin" /> Menyusun Soal...</> : <><Sparkles className="w-4 h-4" /> Generate Lembar Ujian</>}
+                  </button>
+                </div>
+              </div>
+
+              {/* HASIL KANAN */}
+              <div className={`w-full lg:flex-1 bg-[#f1f5f9] dark:bg-slate-900 rounded-xl flex flex-col overflow-hidden print:overflow-visible print:bg-white print:block h-full lg:max-h-full ${!result && !isGenerating ? 'hidden lg:flex items-center justify-center' : 'flex min-h-[500px]'}`}>
+                
+                {!result && !isGenerating && (
+                  <div className="text-center p-8 text-slate-400">
+                    <LayoutTemplate className="w-16 h-16 mx-auto mb-4 opacity-30" />
+                    <p className="text-sm font-medium">Isi parameter di samping untuk membuat Dokumen Ujian.</p>
+                  </div>
+                )}
+
+                {isGenerating && !result && (
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                    <Loader2 className="w-12 h-12 text-orange-500 animate-spin mb-4" />
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">Menyusun Naskah Soal...</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-xs">{progressMsg}</p>
+                  </div>
+                )}
+
+                {result && (
+                  <>
+                    {/* Custom Toast Notification */}
+                    {toast.show && (
+                      <div className={`fixed top-6 right-6 z-[60] p-4 rounded-lg shadow-xl text-white flex items-center gap-3 transition-all ${toast.type === 'error' ? 'bg-red-600' : toast.type === 'loading' ? 'bg-orange-500' : 'bg-emerald-600'}`}>
+                        {toast.type === 'loading' ? <Loader2 className="w-5 h-5 animate-spin"/> : toast.type === 'error' ? <AlertCircle className="w-5 h-5"/> : <CheckCircle2 className="w-5 h-5"/>}
+                        <span className="text-sm font-medium">{toast.message}</span>
+                      </div>
+                    )}
+
+                    {/* Toolbar Atas */}
+                    <div className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 p-2 sm:p-3 flex flex-col sm:flex-row sm:justify-between items-center z-10 shadow-sm print:hidden gap-3 shrink-0">
+                      <div className="flex overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 custom-scrollbar hide-scrollbar-sm space-x-1 sm:space-x-2">
+                        <button onClick={() => setActiveTab('kisi')} className={`shrink-0 px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${activeTab === 'kisi' ? 'bg-orange-100 text-orange-700' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'}`}>1. Kisi-Kisi</button>
+                        <button onClick={() => setActiveTab('soal')} className={`shrink-0 px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${activeTab === 'soal' ? 'bg-orange-100 text-orange-700' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'}`}>2. Naskah Soal</button>
+                        <button onClick={() => setActiveTab('kunci')} className={`shrink-0 px-3 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors ${activeTab === 'kunci' ? 'bg-orange-100 text-orange-700' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700'}`}>3. Kunci & Rubrik</button>
+                      </div>
+                      <div className="flex gap-2 w-full sm:w-auto">
+                        <button onClick={exportToWord} className="flex-1 sm:flex-none px-3 sm:px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs sm:text-sm font-medium flex justify-center items-center gap-1.5 transition-colors" title="Download Format Dokumen Word (Support WPS/MS Word)">
+                          <Download className="w-4 h-4"/> Download Word
+                        </button>
+                        <button onClick={handleDownloadPDF} className="flex-1 sm:flex-none px-3 sm:px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-md text-xs sm:text-sm font-medium flex justify-center items-center gap-1.5 transition-colors" title="Download File PDF (Semua Tab Tergabung)">
+                          <Download className="w-4 h-4"/> Download PDF
+                        </button>
+                      </div>
+                    </div>
+
+                    {fetchingImages && (
+                      <div className="bg-orange-50 text-orange-600 text-[10px] sm:text-xs py-1.5 px-4 flex justify-center items-center gap-2 border-b border-orange-100 print:hidden shrink-0">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Sedang merender gambar di latar belakang... Anda bisa mulai membaca teks soal.
+                      </div>
+                    )}
+
+                    {/* KERTAS A4 VIEW */}
+                    <div className="flex-1 overflow-y-auto overflow-x-auto p-2 sm:p-4 lg:p-8 bg-slate-200/50 dark:bg-slate-900 print:p-0 print:bg-transparent custom-scrollbar print:overflow-visible">
+                      
+                      {/* The "Paper" Container */}
+                      <div ref={printRef} id="print-content" className="min-w-[750px] max-w-[210mm] mx-auto bg-white text-black p-[10mm] sm:p-[15mm] md:p-[20mm] shadow-md print:shadow-none print:p-0 text-[10pt] sm:text-[11pt] leading-normal font-serif">
+                        
+                        {/* ----------------- TAB 1: KISI-KISI & IDENTITAS ----------------- */}
+                        <div className={activeTab === 'kisi' || activeTab === 'all' ? 'block' : 'hidden print:block'}>
+                          
+                          {/* Kop Surat Guru/Arsip DENGAN INLINE CSS KHUSUS WORD */}
+                          <div style={{ textAlign: 'center', borderBottom: '3px solid black', paddingBottom: '12px', marginBottom: '24px' }}>
+                            <p style={{ textTransform: 'uppercase', fontWeight: 'bold', fontSize: '12pt', margin: '0' }}>{safeRender(formData.kabupaten) || 'KABUPATEN/KOTA ...'}</p>
+                            <p style={{ textTransform: 'uppercase', fontWeight: 'bold', fontSize: '12pt', margin: '0' }}>{safeRender(formData.dinas) || 'DINAS PENDIDIKAN ...'}</p>
+                            <p style={{ textTransform: 'uppercase', fontWeight: 'bold', fontSize: '12pt', margin: '0' }}>{safeRender(formData.sekolah) || 'NAMA SEKOLAH ...'}</p>
+                            <p style={{ fontSize: '12pt', margin: '0' }}>{safeRender(formData.alamat) || 'Alamat Sekolah ...'}</p>
+                          </div>
+                          
+                          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                            <h1 style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '12pt', textDecoration: 'underline', margin: '0 0 8px 0' }}>KISI-KISI DAN PEDOMAN EVALUASI</h1>
+                            <p style={{ textTransform: 'uppercase', fontWeight: 'bold', fontSize: '12pt', margin: '0' }}>{safeRender(formData.jenisUjian) || 'EVALUASI PEMBELAJARAN'} {safeRender(formData.semester) || ''} TAHUN {safeRender(formData.tahunPelajaran) || '...'}</p>
+                          </div>
+
+                          <h2 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>A. IDENTITAS TES</h2>
+                          <div className="overflow-x-auto pb-4">
+                            <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '16px', border: 'none' }}>
+                              <tbody>
+                                <tr><td style={{ border: 'none', padding: '6px', width: '150px', fontWeight: 'bold' }}>Nama Sekolah</td><td style={{ border: 'none', width: '16px' }}>:</td><td style={{ border: 'none', padding: '6px' }}>{safeRender(formData.sekolah) || '...'}</td></tr>
+                                <tr><td style={{ border: 'none', padding: '6px', fontWeight: 'bold' }}>Mata Pelajaran</td><td style={{ border: 'none' }}>:</td><td style={{ border: 'none', padding: '6px' }}>{safeRender(formData.mataPelajaran) || '...'}</td></tr>
+                                <tr><td style={{ border: 'none', padding: '6px', fontWeight: 'bold' }}>Jenjang / Kelas</td><td style={{ border: 'none' }}>:</td><td style={{ border: 'none', padding: '6px' }}>{safeRender(formData.jenjang) || '...'} / {safeRender(formData.kelas) || '...'}</td></tr>
+                                <tr><td style={{ border: 'none', padding: '6px', fontWeight: 'bold' }}>Semester</td><td style={{ border: 'none' }}>:</td><td style={{ border: 'none', padding: '6px' }}>{safeRender(formData.semester) || '...'}</td></tr>
+                                <tr><td style={{ border: 'none', padding: '6px', fontWeight: 'bold' }}>Topik Materi</td><td style={{ border: 'none' }}>:</td><td style={{ border: 'none', padding: '6px' }}>{safeRender(formData.topik) || '...'}</td></tr>
+                                <tr><td style={{ border: 'none', padding: '6px', fontWeight: 'bold' }}>Tujuan Pembelajaran</td><td style={{ border: 'none' }}>:</td><td style={{ border: 'none', padding: '6px' }}>{safeRender(formData.tujuanPembelajaran) || '...'}</td></tr>
+                                <tr><td style={{ border: 'none', padding: '6px', fontWeight: 'bold' }}>Total Soal</td><td style={{ border: 'none' }}>:</td><td style={{ border: 'none', padding: '6px' }}>{(Number(formData.jumlahPG)||0) + (Number(formData.jumlahPGK)||0) + (Number(formData.jumlahIsian)||0) + (Number(formData.jumlahEsai)||0) + (Number(formData.jumlahBS)||0) + (Number(formData.jumlahJodoh)||0)} Butir</td></tr>
+                                <tr><td style={{ border: 'none', padding: '6px', fontWeight: 'bold' }}>Tk. Kesulitan & Kognitif</td><td style={{ border: 'none' }}>:</td><td style={{ border: 'none', padding: '6px' }}>{safeRender(formData.tingkatKesulitan) || '...'} — {safeRender(formData.levelKognitif) || '...'}</td></tr>
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <h2 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>B. KISI-KISI SOAL</h2>
+                          <div className="overflow-x-auto pb-4">
+                            <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid black', marginBottom: '32px' }}>
+                              <thead style={{ backgroundColor: '#f3f4f6' }}>
+                                <tr>
+                                  <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '32px', fontWeight: 'bold' }}>No.</th>
+                                  <th style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold' }}>Materi Pokok / Bab</th>
+                                  <th style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold' }}>Indikator Soal</th>
+                                  <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '64px', fontWeight: 'bold' }}>Level</th>
+                                  <th style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold' }}>Stimulus Visual</th>
+                                  <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '64px', fontWeight: 'bold' }}>No. Soal</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {result.kisi_kisi?.map((row, i) => (
+                                  <tr key={i}>
+                                    <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>{safeRender(row.no)}</td>
+                                    <td style={{ border: '1px solid black', padding: '6px' }}>{safeRender(row.materi_pokok || row.materi)}</td>
+                                    <td style={{ border: '1px solid black', padding: '6px' }}>{safeRender(row.indikator)}</td>
+                                    <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>{safeRender(row.level)}</td>
+                                    <td style={{ border: '1px solid black', padding: '6px' }}>{safeRender(row.stimulus_visual !== "null" ? row.stimulus_visual : "Tidak ada")}</td>
+                                    <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>{safeRender(row.no_soal)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          
+                          {/* PEMISAH HALAMAN UNTUK PDF DAN WORD */}
+                          <div className="page-break print:page-break-after-always" style={{ pageBreakAfter: 'always', clear: 'both' }}></div>
+                        </div>
+
+                        {/* ----------------- TAB 2: NASKAH SOAL SISWA ----------------- */}
+                        <div className={activeTab === 'soal' || activeTab === 'all' ? 'block' : 'hidden print:block'}>
+                          
+                          {/* Kop Surat Naskah Soal DENGAN INLINE CSS */}
+                          <div style={{ textAlign: 'center', borderBottom: '3px solid black', paddingBottom: '12px', marginBottom: '16px' }}>
+                            <p style={{ textTransform: 'uppercase', fontWeight: 'bold', fontSize: '12pt', margin: '0' }}>{safeRender(formData.kabupaten) || 'KABUPATEN/KOTA ...'}</p>
+                            <p style={{ textTransform: 'uppercase', fontWeight: 'bold', fontSize: '12pt', margin: '0' }}>{safeRender(formData.dinas) || 'DINAS PENDIDIKAN ...'}</p>
+                            <p style={{ textTransform: 'uppercase', fontWeight: 'bold', fontSize: '12pt', margin: '0' }}>{safeRender(formData.sekolah) || 'NAMA SEKOLAH ...'}</p>
+                            <p style={{ fontSize: '12pt', margin: '0' }}>{safeRender(formData.alamat) || 'Alamat Sekolah ...'}</p>
+                          </div>
+                          <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                            <h1 style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '12pt', margin: '0 0 8px 0' }}>{safeRender(formData.jenisUjian) || 'EVALUASI PEMBELAJARAN'} {safeRender(formData.semester) ? String(formData.semester).toUpperCase() : ''}</h1>
+                            <p style={{ textTransform: 'uppercase', fontWeight: 'bold', fontSize: '12pt', margin: '0' }}>TAHUN PELAJARAN {safeRender(formData.tahunPelajaran) || '...'}</p>
+                          </div>
+
+                          {/* Header Siswa */}
+                          <table style={{ width: '100%', border: 'none', marginBottom: '24px' }}>
+                            <tbody>
+                              <tr>
+                                <td style={{ width: '100px', padding: '4px', border: 'none', fontWeight: 'bold' }}>Mata Pelajaran</td><td style={{ width: '10px', border: 'none' }}>:</td><td style={{ border: 'none' }}>{safeRender(formData.mataPelajaran) || '...'}</td>
+                                <td style={{ width: '90px', padding: '4px', border: 'none', fontWeight: 'bold' }}>Hari/Tanggal</td><td style={{ width: '10px', border: 'none' }}>:</td><td style={{ border: 'none' }}><div style={{ borderBottom: '1px dotted black', width: '100%', minWidth: '120px', height: '16px' }}></div></td>
+                              </tr>
+                              <tr>
+                                <td style={{ padding: '4px', border: 'none', fontWeight: 'bold' }}>Kelas / Semester</td><td style={{ border: 'none' }}>:</td><td style={{ border: 'none' }}>{safeRender(formData.kelas) || '...'} / {safeRender(formData.semester) || '...'}</td>
+                                <td style={{ padding: '4px', border: 'none', fontWeight: 'bold' }}>Waktu</td><td style={{ border: 'none' }}>:</td><td style={{ border: 'none' }}>{safeRender(formData.durasi) || '...'}</td>
+                              </tr>
+                              <tr>
+                                <td style={{ padding: '4px', border: 'none', fontWeight: 'bold' }}>Nama Siswa</td><td style={{ border: 'none' }}>:</td><td style={{ border: 'none', paddingRight: '16px' }}><div style={{ borderBottom: '1px dotted black', width: '100%', minWidth: '120px', height: '16px' }}></div></td>
+                                <td style={{ padding: '4px', border: 'none', fontWeight: 'bold' }}>No. Absen</td><td style={{ border: 'none' }}>:</td><td style={{ border: 'none' }}><div style={{ borderBottom: '1px dotted black', width: '100%', minWidth: '50px', height: '16px' }}></div></td>
+                              </tr>
+                            </tbody>
+                          </table>
+
+                          <h2 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>C. PETUNJUK UMUM UNTUK PESERTA DIDIK</h2>
+                          <ol style={{ paddingLeft: '20px', marginBottom: '32px' }}>
+                            <li style={{ marginBottom: '4px' }}>Berdoalah sebelum memulai mengerjakan soal.</li>
+                            <li style={{ marginBottom: '4px' }}>Bacalah setiap stimulus (teks atau gambar/grafik) dengan cermat.</li>
+                            <li style={{ marginBottom: '4px' }}>Kerjakan soal dengan jujur dan mandiri.</li>
+                            <li style={{ marginBottom: '4px' }}>Periksa kembali jawaban sebelum dikumpulkan.</li>
+                          </ol>
+
+                          <h2 style={{ fontWeight: 'bold', fontSize: '12pt', borderBottom: '1px solid black', paddingBottom: '8px', marginBottom: '16px' }}>D. BUTIR SOAL</h2>
+
+                          {/* BAGIAN PG */}
+                          {result.meta_count?.pg > 0 && result.soal?.pg && (
+                            <div style={{ marginBottom: '32px' }}>
+                              <h3 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>Pilihan Ganda</h3>
+                              <p style={{ fontStyle: 'italic', marginBottom: '16px' }}>Petunjuk: Pilihlah satu jawaban yang paling tepat dengan menyilang huruf pada opsi jawaban yang tersedia!</p>
+                              
+                              <div>
+                                {result.soal.pg.map((item, i) => (
+                                  <table key={`pg-${i}`} className="break-inside-avoid" style={{ width: '100%', border: 'none', marginBottom: '16px', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                                    <tbody>
+                                      <tr>
+                                        <td style={{ width: '25px', verticalAlign: 'top', border: 'none', fontWeight: 'bold' }}>{safeRender(item.no)}.</td>
+                                        <td style={{ verticalAlign: 'top', border: 'none' }}>
+                                          <p style={{ margin: '0 0 8px 0', whiteSpace: 'pre-wrap' }}>{safeRender(item.pertanyaan)}</p>
+                                          
+                                          {/* Gambar Tanpa Flexbox - Kuat di Word */}
+                                          {safeRender(item.gambar_dibutuhkan) && safeRender(item.gambar_dibutuhkan) !== "null" && (
+                                            <div style={{ textAlign: 'center', margin: '15px 0' }}>
+                                              {item.image_url ? (
+                                                <img src={item.image_url} alt="Ilustrasi" style={{ maxWidth: '100%', width: '350px', height: 'auto', display: 'block', margin: '10px auto' }} width="350" />
+                                              ) : item.image_error ? (
+                                                <div className="print:hidden">
+                                                  <span>[ Gambar Visual Gagal Dimuat ]</span>
+                                                  <button onClick={() => retrySingleImage('pg', i, item.gambar_dibutuhkan)} className="mt-2 px-2 py-1 bg-orange-100 text-orange-700 rounded text-[10px] mx-auto flex items-center gap-1"><RefreshCw className="w-3 h-3"/> Ulangi</button>
+                                                </div>
+                                              ) : (
+                                                <span className="print:hidden">Merender Ilustrasi...</span>
+                                              )}
+                                            </div>
+                                          )}
+
+                                          <table style={{ width: '100%', border: 'none', marginTop: '8px' }}>
+                                            <tbody>
+                                              {item.opsi?.map((opsi, idx) => (
+                                                <tr key={idx}>
+                                                  <td style={{ width: '25px', verticalAlign: 'top', border: 'none' }}>{safeRender(opsi).charAt(0)}.</td>
+                                                  <td style={{ verticalAlign: 'top', border: 'none' }}>{safeRender(opsi).substring(2).trim()}</td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* BAGIAN PG KOMPLEKS */}
+                          {result.meta_count?.pgk > 0 && result.soal?.pgk && (
+                            <div style={{ marginBottom: '32px' }}>
+                              <h3 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>Pilihan Ganda Kompleks</h3>
+                              <p style={{ fontStyle: 'italic', marginBottom: '16px' }}>Petunjuk: Berilah tanda centang (✓) pada kotak di depan opsi untuk jawaban-jawaban yang benar. (Jawaban benar lebih dari satu)!</p>
+                              
+                              <div>
+                                {result.soal.pgk.map((item, i) => (
+                                  <table key={`pgk-${i}`} className="break-inside-avoid" style={{ width: '100%', border: 'none', marginBottom: '16px', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                                    <tbody>
+                                      <tr>
+                                        <td style={{ width: '25px', verticalAlign: 'top', border: 'none', fontWeight: 'bold' }}>{safeRender(item.no)}.</td>
+                                        <td style={{ verticalAlign: 'top', border: 'none' }}>
+                                          <p style={{ margin: '0 0 8px 0', whiteSpace: 'pre-wrap' }}>{safeRender(item.pertanyaan)}</p>
+                                          
+                                          {safeRender(item.gambar_dibutuhkan) && safeRender(item.gambar_dibutuhkan) !== "null" && (
+                                            <div style={{ textAlign: 'center', margin: '15px 0' }}>
+                                              {item.image_url ? (
+                                                <img src={item.image_url} alt="Ilustrasi" style={{ maxWidth: '100%', width: '350px', height: 'auto', display: 'block', margin: '10px auto' }} width="350" />
+                                              ) : item.image_error ? (
+                                                <div className="print:hidden">
+                                                  <span>[ Gambar Visual Gagal Dimuat ]</span>
+                                                  <button onClick={() => retrySingleImage('pgk', i, item.gambar_dibutuhkan)} className="mt-2 px-2 py-1 bg-orange-100 text-orange-700 rounded text-[10px] mx-auto flex items-center gap-1"><RefreshCw className="w-3 h-3"/> Ulangi</button>
+                                                </div>
+                                              ) : (
+                                                <span className="print:hidden">Merender Ilustrasi...</span>
+                                              )}
+                                            </div>
+                                          )}
+
+                                          <table style={{ width: '100%', border: 'none', marginTop: '8px' }}>
+                                            <tbody>
+                                              {item.opsi?.map((opsi, idx) => (
+                                                <tr key={idx}>
+                                                  <td style={{ width: '25px', verticalAlign: 'top', border: 'none', paddingTop: '4px' }}>
+                                                    <div style={{ width: '14px', height: '14px', border: '1px solid black', display: 'inline-block', backgroundColor: 'white' }}></div>
+                                                  </td>
+                                                  <td style={{ width: '25px', verticalAlign: 'top', border: 'none' }}>{safeRender(opsi).charAt(0)}.</td>
+                                                  <td style={{ verticalAlign: 'top', border: 'none' }}>{safeRender(opsi).substring(2).trim()}</td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                        </td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* BAGIAN BENAR/SALAH */}
+                          {result.meta_count?.bs > 0 && result.soal?.bs && (
+                            <div style={{ marginBottom: '32px' }}>
+                              <h3 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>Benar / Salah</h3>
+                              <p style={{ fontStyle: 'italic', marginBottom: '16px' }}>Petunjuk: Berilah tanda centang (✓) atau silang (✗) pada kolom Benar atau Salah sesuai dengan pernyataan berikut!</p>
+                              
+                              <div className="overflow-x-auto pb-4">
+                                <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid black', marginBottom: '24px' }}>
+                                  <thead style={{ backgroundColor: '#f3f4f6' }}>
+                                    <tr>
+                                      <th style={{ border: '1px solid black', padding: '8px', width: '32px', textAlign: 'center', fontWeight: 'bold' }}>No.</th>
+                                      <th style={{ border: '1px solid black', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>Pernyataan</th>
+                                      <th style={{ border: '1px solid black', padding: '8px', width: '64px', textAlign: 'center', fontWeight: 'bold' }}>Benar</th>
+                                      <th style={{ border: '1px solid black', padding: '8px', width: '64px', textAlign: 'center', fontWeight: 'bold' }}>Salah</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {result.soal.bs.map((item, i) => (
+                                      <tr key={`bs-${i}`} className="break-inside-avoid" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                                        <td style={{ border: '1px solid black', padding: '8px', textAlign: 'center', fontWeight: 'bold', verticalAlign: 'top' }}>{safeRender(item.no)}.</td>
+                                        <td style={{ border: '1px solid black', padding: '8px', verticalAlign: 'top' }}>
+                                          {safeRender(item.gambar_dibutuhkan) && safeRender(item.gambar_dibutuhkan) !== "null" && (
+                                            <div style={{ textAlign: 'center', margin: '8px 0' }}>
+                                              {item.image_url ? (
+                                                <img src={item.image_url} alt="Ilustrasi" style={{ maxWidth: '100%', width: '250px', height: 'auto', display: 'block', margin: '10px auto' }} width="250" />
+                                              ) : item.image_error ? (
+                                                <button onClick={() => retrySingleImage('bs', i, item.gambar_dibutuhkan)} className="text-orange-500 print:hidden text-[10px]">Coba Ulang</button>
+                                              ) : (
+                                                <span className="print:hidden">Merender Ilustrasi...</span>
+                                              )}
+                                            </div>
+                                          )}
+                                          <p style={{ margin: '0', whiteSpace: 'pre-wrap' }}>{safeRender(item.pertanyaan)}</p>
+                                        </td>
+                                        <td style={{ border: '1px solid black', padding: '8px', textAlign: 'center' }}></td>
+                                        <td style={{ border: '1px solid black', padding: '8px', textAlign: 'center' }}></td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* BAGIAN MENJODOHKAN */}
+                          {result.meta_count?.jodoh > 0 && result.soal?.jodoh?.ada && (
+                            <div className="break-inside-avoid" style={{ marginBottom: '32px', pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                              <h3 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>Menjodohkan</h3>
+                              <p style={{ fontStyle: 'italic', marginBottom: '16px' }}>Petunjuk: {safeRender(result.soal.jodoh.petunjuk)}</p>
+                              
+                              <table style={{ width: '100%', borderCollapse: 'collapse', border: 'none' }}>
+                                <tbody>
+                                  <tr>
+                                    <td style={{ width: '50%', verticalAlign: 'top', padding: '10px', border: '1px solid black', borderRight: 'none' }}>
+                                      <p style={{ fontWeight: 'bold', marginBottom: '12px', borderBottom: '1px solid black', paddingBottom: '4px', textAlign: 'center' }}>Kolom A (Pernyataan)</p>
+                                      <table style={{ width: '100%', border: 'none' }}>
+                                        <tbody>
+                                          {result.soal.jodoh.premis?.map((p, i) => (
+                                            <tr key={i}>
+                                              <td style={{ width: '25px', verticalAlign: 'top', fontWeight: 'bold', border: 'none', paddingBottom: '8px' }}>{safeRender(p.no)}.</td>
+                                              <td style={{ verticalAlign: 'top', border: 'none', paddingBottom: '8px' }}>{safeRender(p.teks)}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </td>
+                                    <td style={{ width: '50%', verticalAlign: 'top', padding: '10px', border: '1px solid black' }}>
+                                      <p style={{ fontWeight: 'bold', marginBottom: '12px', borderBottom: '1px solid black', paddingBottom: '4px', textAlign: 'center' }}>Kolom B (Pilihan Jawaban)</p>
+                                      <table style={{ width: '100%', border: 'none' }}>
+                                        <tbody>
+                                          {result.soal.jodoh.pilihan?.map((pil, i) => (
+                                            <tr key={i}>
+                                              <td style={{ verticalAlign: 'top', border: 'none', paddingBottom: '8px' }}>{safeRender(pil)}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+
+                          {/* BAGIAN ISIAN SINGKAT */}
+                          {result.meta_count?.isian > 0 && result.soal?.isian && (
+                            <div style={{ marginBottom: '32px' }}>
+                              <h3 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>Isian Singkat</h3>
+                              <p style={{ fontStyle: 'italic', marginBottom: '16px' }}>Petunjuk: Isilah titik-titik di bawah ini dengan jawaban yang tepat!</p>
+                              
+                              <div className="space-y-4">
+                                {result.soal.isian.map((item, i) => (
+                                  <table key={`isian-${i}`} className="break-inside-avoid" style={{ width: '100%', border: 'none', pageBreakInside: 'avoid', breakInside: 'avoid', marginBottom: '16px' }}>
+                                    <tbody>
+                                      <tr>
+                                        <td style={{ width: '25px', verticalAlign: 'top', border: 'none', fontWeight: 'bold' }}>{safeRender(item.no)}.</td>
+                                        <td style={{ verticalAlign: 'top', border: 'none' }}>
+                                          {safeRender(item.gambar_dibutuhkan) && safeRender(item.gambar_dibutuhkan) !== "null" && (
+                                            <div style={{ textAlign: 'center', margin: '15px 0' }}>
+                                              {item.image_url ? (
+                                                <img src={item.image_url} alt="Ilustrasi" style={{ maxWidth: '100%', width: '350px', height: 'auto', display: 'block', margin: '10px auto' }} width="350" />
+                                              ) : item.image_error ? (
+                                                <div className="print:hidden">
+                                                  <span>[ Gambar Visual Gagal Dimuat ]</span>
+                                                  <button onClick={() => retrySingleImage('isian', i, item.gambar_dibutuhkan)} className="mt-2 px-2 py-1 bg-orange-100 text-orange-700 rounded text-[10px] mx-auto flex items-center gap-1"><RefreshCw className="w-3 h-3"/> Ulangi</button>
+                                                </div>
+                                              ) : (
+                                                <span className="print:hidden">Merender Ilustrasi...</span>
+                                              )}
+                                            </div>
+                                          )}
+                                          <p style={{ margin: '0', whiteSpace: 'pre-wrap', lineHeight: '2' }}>{safeRender(item.pertanyaan).replace(/_+/g, '.........................')}</p>
+                                        </td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* BAGIAN ESAI */}
+                          {result.meta_count?.esai > 0 && result.soal?.esai && (
+                            <div style={{ marginBottom: '32px' }}>
+                              <h3 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>Uraian / Esai Berbasis Masalah</h3>
+                              <p style={{ fontStyle: 'italic', marginBottom: '16px' }}>Petunjuk: Jawablah soal berikut dengan lengkap, rinci, dan sistematis!</p>
+                              
+                              <div className="space-y-6">
+                                {result.soal.esai.map((item, i) => (
+                                  <table key={`esai-${i}`} className="break-inside-avoid" style={{ width: '100%', border: 'none', pageBreakInside: 'avoid', breakInside: 'avoid', marginBottom: '24px' }}>
+                                    <tbody>
+                                      <tr>
+                                        <td style={{ width: '25px', verticalAlign: 'top', border: 'none', fontWeight: 'bold' }}>{safeRender(item.no)}.</td>
+                                        <td style={{ verticalAlign: 'top', border: 'none' }}>
+                                          {safeRender(item.gambar_dibutuhkan) && safeRender(item.gambar_dibutuhkan) !== "null" && (
+                                            <div style={{ textAlign: 'center', margin: '15px 0' }}>
+                                              {item.image_url ? (
+                                                <img src={item.image_url} alt="Ilustrasi" style={{ maxWidth: '100%', width: '350px', height: 'auto', display: 'block', margin: '10px auto' }} width="350" />
+                                              ) : item.image_error ? (
+                                                <div className="print:hidden">
+                                                  <span>[ Gambar Visual Gagal Dimuat ]</span>
+                                                  <button onClick={() => retrySingleImage('esai', i, item.gambar_dibutuhkan)} className="mt-2 px-2 py-1 bg-orange-100 text-orange-700 rounded text-[10px] mx-auto flex items-center gap-1"><RefreshCw className="w-3 h-3"/> Ulangi</button>
+                                                </div>
+                                              ) : (
+                                                <span className="print:hidden">Merender Ilustrasi...</span>
+                                              )}
+                                            </div>
+                                          )}
+                                          <p style={{ margin: '0 0 16px 0', whiteSpace: 'pre-wrap' }}>{safeRender(item.pertanyaan)}</p>
+                                          {/* Space for answer */}
+                                          <div style={{ width: '100%' }}>
+                                            <div style={{ borderBottom: '1px solid gray', width: '100%', height: '24px' }}></div>
+                                            <div style={{ borderBottom: '1px solid gray', width: '100%', height: '24px' }}></div>
+                                            <div style={{ borderBottom: '1px solid gray', width: '100%', height: '24px' }}></div>
+                                            <div style={{ borderBottom: '1px solid gray', width: '100%', height: '24px' }}></div>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* PEMISAH HALAMAN UNTUK PDF DAN WORD */}
+                          <div className="page-break print:page-break-after-always" style={{ pageBreakAfter: 'always', clear: 'both' }}></div>
+                        </div>
+
+                        {/* ----------------- TAB 3: KUNCI JAWABAN & RUBRIK ----------------- */}
+                        <div className={activeTab === 'kunci' || activeTab === 'all' ? 'block' : 'hidden print:block'}>
+                          
+                          <h2 style={{ fontWeight: 'bold', fontSize: '12pt', textAlign: 'center', textTransform: 'uppercase', marginBottom: '16px' }}>F. KUNCI JAWABAN DAN PEDOMAN PENSKORAN</h2>
+
+                          {/* Kunci PG */}
+                          {result.meta_count?.pg > 0 && result.kunci?.pg && (
+                            <div style={{ marginBottom: '24px' }}>
+                              <h3 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>Kunci Jawaban Pilihan Ganda</h3>
+                              <div className="overflow-x-auto pb-4">
+                                <table style={{ width: '100%', maxWidth: '500px', borderCollapse: 'collapse', border: '1px solid black' }}>
+                                  <thead style={{ backgroundColor: '#f3f4f6' }}>
+                                    <tr>
+                                      <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '40px', fontWeight: 'bold' }}>No.</th>
+                                      <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '100px', fontWeight: 'bold' }}>Jawaban</th>
+                                      <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '100px', fontWeight: 'bold' }}>Level</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {result.kunci.pg.map((k, i) => (
+                                      <tr key={i}>
+                                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>{safeRender(k.no)}</td>
+                                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>{safeRender(k.jawaban)}</td>
+                                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>{safeRender(k.level)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Kunci PG Kompleks */}
+                          {result.meta_count?.pg > 0 && result.kunci?.pgk && (
+                            <div style={{ marginBottom: '24px' }}>
+                              <h3 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>Kunci Jawaban Pilihan Ganda Kompleks</h3>
+                              <div className="overflow-x-auto pb-4">
+                                <table style={{ width: '100%', maxWidth: '500px', borderCollapse: 'collapse', border: '1px solid black' }}>
+                                  <thead style={{ backgroundColor: '#f3f4f6' }}>
+                                    <tr>
+                                      <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '40px', fontWeight: 'bold' }}>No.</th>
+                                      <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '200px', fontWeight: 'bold' }}>Jawaban Benar</th>
+                                      <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '100px', fontWeight: 'bold' }}>Level</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {result.kunci.pgk.map((k, i) => (
+                                      <tr key={i}>
+                                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>{safeRender(k.no)}</td>
+                                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>
+                                          {Array.isArray(k.jawaban) ? k.jawaban.join(', ') : safeRender(k.jawaban)}
+                                        </td>
+                                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>{safeRender(k.level)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                              <p style={{ fontSize: '10pt', fontStyle: 'italic', marginTop: '4px' }}>Catatan PGK: Nilai penuh diberikan jika seluruh jawaban benar terpilih.</p>
+                            </div>
+                          )}
+                          
+                          {/* Kunci BS */}
+                          {result.meta_count?.bs > 0 && result.kunci?.bs && (
+                            <div style={{ marginBottom: '24px' }}>
+                              <h3 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>Kunci Jawaban Benar / Salah</h3>
+                              <div className="overflow-x-auto pb-4">
+                                <table style={{ width: '100%', maxWidth: '400px', borderCollapse: 'collapse', border: '1px solid black' }}>
+                                  <thead style={{ backgroundColor: '#f3f4f6' }}>
+                                    <tr>
+                                      <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '40px', fontWeight: 'bold' }}>No.</th>
+                                      <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '150px', fontWeight: 'bold' }}>Kunci Jawaban</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {result.kunci.bs.map((k, i) => (
+                                      <tr key={i}>
+                                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>{safeRender(k.no)}</td>
+                                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>{safeRender(k.jawaban)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Kunci Menjodohkan */}
+                          {result.meta_count?.jodoh > 0 && result.kunci?.jodoh && (
+                            <div style={{ marginBottom: '24px' }}>
+                              <h3 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>Kunci Jawaban Menjodohkan</h3>
+                              <div className="overflow-x-auto pb-4">
+                                <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid black' }}>
+                                  <thead style={{ backgroundColor: '#f3f4f6' }}>
+                                    <tr>
+                                      <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '80px', fontWeight: 'bold' }}>No. Premis</th>
+                                      <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '100px', fontWeight: 'bold' }}>Pilihan (Huruf)</th>
+                                      <th style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold' }}>Jawaban Teks Lengkap</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {result.kunci.jodoh.map((k, i) => (
+                                      <tr key={i}>
+                                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>{safeRender(k.no)}</td>
+                                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>{safeRender(k.jawaban_huruf)}</td>
+                                        <td style={{ border: '1px solid black', padding: '6px' }}>{safeRender(k.jawaban_teks)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Kunci Isian */}
+                          {result.meta_count?.isian > 0 && result.kunci?.isian && (
+                            <div style={{ marginBottom: '24px' }}>
+                              <h3 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>Kunci Jawaban Isian Singkat</h3>
+                              <div className="overflow-x-auto pb-4">
+                                <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid black' }}>
+                                  <thead style={{ backgroundColor: '#f3f4f6' }}>
+                                    <tr>
+                                      <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '40px', fontWeight: 'bold' }}>No.</th>
+                                      <th style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold' }}>Kunci Jawaban</th>
+                                      <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', width: '100px', fontWeight: 'bold' }}>Skor Maks.</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {result.kunci.isian.map((k, i) => (
+                                      <tr key={i}>
+                                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>{safeRender(k.no)}</td>
+                                        <td style={{ border: '1px solid black', padding: '6px' }}>{safeRender(k.jawaban)}</td>
+                                        <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>{safeRender(k.skor_maks) || 4}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Rubrik Esai */}
+                          {result.meta_count?.esai > 0 && result.rubrik_esai && (
+                            <div style={{ marginBottom: '32px', pageBreakBefore: 'auto' }}>
+                              <h3 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '8px' }}>Rubrik Penilaian Analitis Soal Esai</h3>
+                              <div className="overflow-x-auto pb-4">
+                                <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid black', fontSize: '10pt' }}>
+                                  <thead style={{ backgroundColor: '#f3f4f6' }}>
+                                    <tr>
+                                      <th style={{ border: '1px solid black', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>Kriteria Penilaian</th>
+                                      <th style={{ border: '1px solid black', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>Skor 4 (Sangat Baik)</th>
+                                      <th style={{ border: '1px solid black', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>Skor 3 (Baik)</th>
+                                      <th style={{ border: '1px solid black', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>Skor 2 (Cukup)</th>
+                                      <th style={{ border: '1px solid black', padding: '8px', textAlign: 'center', fontWeight: 'bold' }}>Skor 1 (Kurang)</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {result.rubrik_esai.map((r, i) => (
+                                      <tr key={i} style={{ verticalAlign: 'top' }}>
+                                        <td style={{ border: '1px solid black', padding: '8px', fontWeight: 'bold' }}>{safeRender(r.kriteria)}</td>
+                                        <td style={{ border: '1px solid black', padding: '8px' }}>{safeRender(r.skor_4)}</td>
+                                        <td style={{ border: '1px solid black', padding: '8px' }}>{safeRender(r.skor_3)}</td>
+                                        <td style={{ border: '1px solid black', padding: '8px' }}>{safeRender(r.skor_2)}</td>
+                                        <td style={{ border: '1px solid black', padding: '8px' }}>{safeRender(r.skor_1)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+
+                          <h2 style={{ fontWeight: 'bold', fontSize: '12pt', marginBottom: '16px' }}>G. STRUKTUR PENILAIAN DAN BOBOT</h2>
+                          <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 items-start mb-12">
+                            <div className="overflow-x-auto w-full lg:w-3/5">
+                              <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid black', fontSize: '11pt' }}>
+                                <thead style={{ backgroundColor: '#f3f4f6' }}>
+                                  <tr>
+                                    <th style={{ border: '1px solid black', padding: '6px', fontWeight: 'bold' }}>Bagian Soal</th>
+                                    <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>Jumlah</th>
+                                    <th style={{ border: '1px solid black', padding: '6px', textAlign: 'center', fontWeight: 'bold' }}>Poin/Soal</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {result.meta_count?.pg > 0 && (
+                                    <tr>
+                                      <td style={{ border: '1px solid black', padding: '6px' }}>Pilihan Ganda Biasa</td>
+                                      <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>{result.meta_count.pg}</td>
+                                      <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>2 Poin</td>
+                                    </tr>
+                                  )}
+                                  {result.meta_count?.pgk > 0 && (
+                                    <tr>
+                                      <td style={{ border: '1px solid black', padding: '6px' }}>Pilihan Ganda Kompleks</td>
+                                      <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>{result.meta_count.pgk}</td>
+                                      <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>4 Poin</td>
+                                    </tr>
+                                  )}
+                                  {result.meta_count?.bs > 0 && (
+                                    <tr>
+                                      <td style={{ border: '1px solid black', padding: '6px' }}>Benar / Salah</td>
+                                      <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>{result.meta_count.bs}</td>
+                                      <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>2 Poin</td>
+                                    </tr>
+                                  )}
+                                  {result.meta_count?.jodoh > 0 && (
+                                    <tr>
+                                      <td style={{ border: '1px solid black', padding: '6px' }}>Menjodohkan</td>
+                                      <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>{result.meta_count.jodoh}</td>
+                                      <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>2 Poin</td>
+                                    </tr>
+                                  )}
+                                  {result.meta_count?.isian > 0 && (
+                                    <tr>
+                                      <td style={{ border: '1px solid black', padding: '6px' }}>Isian Singkat</td>
+                                      <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>{result.meta_count.isian}</td>
+                                      <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>4 Poin</td>
+                                    </tr>
+                                  )}
+                                  {result.meta_count?.esai > 0 && (
+                                    <tr>
+                                      <td style={{ border: '1px solid black', padding: '6px' }}>Esai / Uraian</td>
+                                      <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>{result.meta_count.esai}</td>
+                                      <td style={{ border: '1px solid black', padding: '6px', textAlign: 'center' }}>8 Poin</td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                            
+                            <div className="lg:w-2/5 w-full p-3 sm:p-4 border border-black text-xs sm:text-sm">
+                              <p style={{ fontWeight: 'bold', marginBottom: '4px' }}>Rumus Nilai Akhir:</p>
+                              <p style={{ fontFamily: 'monospace', backgroundColor: '#f3f4f6', padding: '8px', border: '1px solid #d1d5db', marginBottom: '12px' }}>Nilai = (Skor Perolehan / Total Maks) × 100</p>
+                              <p style={{ fontSize: '10pt', fontStyle: 'italic', color: '#4b5563' }}>Total Maks adalah akumulasi (Jumlah Soal × Poin/Soal) dari setiap bagian yang digunakan.</p>
+                            </div>
+                          </div>
+
+                          {/* Tanda Tangan Menggunakan Tabel agar kebal di Export Word */}
+                          <table style={{ width: '100%', border: 'none', marginTop: '48px', marginBottom: '32px' }}>
+                            <tbody>
+                              <tr>
+                                <td style={{ width: '60%', border: 'none' }}></td>
+                                <td style={{ width: '40%', border: 'none', textAlign: 'center' }}>
+                                  <p style={{ margin: '0 0 8px 0' }}>{(safeRender(formData.kabupaten) || 'KAB/KOTA').replace('KABUPATEN ', '')}, ....................... {(safeRender(formData.tahunPelajaran) || new Date().getFullYear().toString()).split('/')[1] || new Date().getFullYear()}</p>
+                                  <p style={{ margin: '0 0 80px 0' }}>Guru Mata Pelajaran,</p>
+                                  <p style={{ margin: '0', fontWeight: 'bold', textDecoration: 'underline' }}>{safeRender(formData.guru) || '.....................................'}</p>
+                                  <p style={{ margin: '0' }}>NIP. {safeRender(formData.nip) || '..............................'}</p>
+                                </td>
+                              </tr>
+                            </tbody>
+                          </table>
+
+                        </div>
+
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        }
+
+        // --- RENDER APLIKASI ---
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
